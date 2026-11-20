@@ -11,6 +11,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [newTranscript, setNewTranscript] = useState('');
   const [showGenerator, setShowGenerator] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState('');
 
   useEffect(() => {
