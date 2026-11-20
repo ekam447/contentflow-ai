@@ -8,6 +8,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Settings } from './pages/Settings';
 import { Generation } from './pages/Generation';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ResetPassword } from './pages/ResetPassword';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -63,7 +64,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/reset-password" element={<Navigate to="/login" replace />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
       </Routes>
       <Footer />
     </AuthProvider>

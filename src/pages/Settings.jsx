@@ -1,98 +1,221 @@
+
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
-import { User, Mail, Lock, ShieldCheck } from 'lucide-react';
 import { Navbar, Footer } from '../components';
 
 export function Settings() {
-  const { user } = useAuth();
+  const { user, resetPassword } = useAuth();
+
   const [tab, setTab] = useState('profile');
+  const [fullName, setFullName] = useState(
+    user?.user_metadata?.full_name || ''
+  );
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  function clearMessages() {
+    setMessage('');
+    setError('');
+  }
+
+  async function saveProfile(e) {
+    e.preventDefault();
+    clearMessages();
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { full_name: fullName.trim() },
+      });
+
+      if (error) throw error;
+
+      setMessage('Your profile has been updated.');
+    } catch (err) {
+      setError(err.message || 'Could not update your profile.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function sendPasswordReset() {
+    clearMessages();
+    setLoading(true);
+
+    try {
+      const { error } = await resetPassword({
+        email: user.email,
+      });
+
+      if (error) throw error;
+
+      setMessage('Password reset email sent. Check your inbox.');
+    } catch (err) {
+      setError(err.message || 'Could not send the reset email.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function changeTab(nextTab) {
+    setTab(nextTab);
+    clearMessages();
+  }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--color-bg-alt)' }}>
+    <div
+      className="min-h-screen flex flex-col"
+      style={{ backgroundColor: 'var(--color-bg-alt)' }}
+    >
       <Navbar />
+
       <main className="flex-grow container section">
         <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1rem' }}>Account settings</h1>
+          <h1 className="text-3xl font-bold mb-md">
+            Account settings
+          </h1>
 
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '1rem' }}>
+          <div className="flex gap-sm flex-wrap mb-lg">
             <button
-              className={`btn btn-ghost ${tab === 'profile' ? 'text-primary font-semibold border-b-2 border-primary pb-1' : ''}`}
-              onClick={() => setTab('profile')}
+              type="button"
+              className={tab === 'profile' ? 'btn btn-primary' : 'btn'}
+              onClick={() => changeTab('profile')}
             >
               Profile
             </button>
+
             <button
-              className={`btn btn-ghost ${tab === 'security' ? 'text-primary font-semibold border-b-2 border-primary pb-1' : ''}`}
-              onClick={() => setTab('security')}
+              type="button"
+              className={tab === 'security' ? 'btn btn-primary' : 'btn'}
+              onClick={() => changeTab('security')}
             >
               Security
             </button>
+
             <button
-              className={`btn btn-ghost ${tab === 'subscription' ? 'text-primary font-semibold border-b-2 border-primary pb-1' : ''}`}
-              onClick={() => setTab('subscription')}
+              type="button"
+              className={tab === 'subscription' ? 'btn btn-primary' : 'btn'}
+              onClick={() => changeTab('subscription')}
             >
               Subscription
             </button>
           </div>
 
+          {message && (
+            <div className="alert alert-success mb-md">
+              {message}
+            </div>
+          )}
+
+          {error && (
+            <div className="alert alert-error mb-md">
+              {error}
+            </div>
+          )}
+
           {tab === 'profile' && (
-            <div className="card mb-md">
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <User size={20} /> Profile
+            <div className="card">
+              <h2 className="text-xl font-bold mb-md">
+                Profile information
               </h2>
-              <div className="form-group">
-                <label className="form-label">Email</label>
-                <input
-                  type="email"
-                  className="form-control"
-                  defaultValue={user?.email || ''}
-                  readOnly
-                />
-                <p className="form-hint">Email cannot be changed from this screen yet.</p>
-              </div>
+
+              <form onSubmit={saveProfile}>
+                <div className="form-group">
+                  <label htmlFor="full-name">Display name</label>
+                  <input
+                    id="full-name"
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Enter your name"
+                    maxLength={80}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="account-email">Email address</label>
+                  <input
+                    id="account-email"
+                    type="email"
+                    value={user?.email || ''}
+                    readOnly
+                  />
+                  <p className="text-sm">
+                    Your registered email address.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={loading}
+                >
+                  {loading ? 'Saving...' : 'Save profile'}
+                </button>
+              </form>
             </div>
           )}
 
           {tab === 'security' && (
-            <div className="card mb-md">
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <ShieldCheck size={20} /> Security
+            <div className="card">
+              <h2 className="text-xl font-bold mb-md">
+                Account security
               </h2>
-              <div className="form-group">
-                <label className="form-label">Change password</label>
-                <p className="form-hint">Use the forgot password flow on the sign-in page to reset your password securely.</p>
-                <Link to="/login" className="btn btn-outline" style={{ marginTop: '0.5rem' }}>
-                  Sign out and reset password
-                </Link>
+
+              <p className="mb-md">
+                We will send a secure password-reset link to:
+              </p>
+
+              <p className="font-semibold mb-md">
+                {user?.email}
+              </p>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={sendPasswordReset}
+                disabled={loading || !user?.email}
+              >
+                {loading ? 'Sending...' : 'Send password reset email'}
+              </button>
+
+              <p className="mt-md text-sm">
+                You can use the link in the email to choose a new password.
+              </p>
+
+              <div className="mt-lg">
+                <Link to="/login">Go to login</Link>
               </div>
             </div>
           )}
 
           {tab === 'subscription' && (
-            <div className="card mb-md">
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Mail size={20} /> Subscription
+            <div className="card">
+              <h2 className="text-xl font-bold mb-md">
+                Subscription
               </h2>
-              <div style={{ padding: '1rem', backgroundColor: '#fef3c7', borderRadius: '0.5rem', border: '1px solid #fcd34d' }}>
-                <p style={{ color: '#92400e', fontSize: '0.9375rem', margin: 0 }}>
-                  You are on the <strong>Free plan</strong>. Upgrade to Creator Pro (₹499/month) for 30 generations per month, brand voice, and history.
-                </p>
-              </div>
-              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9375rem', marginTop: '1rem' }}>
-                Payment integration is being prepared. No charges will be applied without a verified payment flow.
-              </p>
-            </div>
-          )}
 
-          {message && (
-            <div className="alert alert-success" role="alert" style={{ marginTop: '1rem' }}>
-              {message}
+              <p className="mb-sm">
+                Current plan: <strong>Free</strong>
+              </p>
+
+              <p className="mb-md">
+                Paid subscriptions are not available yet.
+                No payment will be taken from your account.
+              </p>
+
+              <p className="text-sm">
+                Subscription plans and billing will be added after
+                payment integration is ready.
+              </p>
             </div>
           )}
         </div>
       </main>
+
       <Footer />
     </div>
   );
