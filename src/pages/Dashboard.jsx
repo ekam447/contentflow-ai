@@ -19,37 +19,83 @@ export function Dashboard() {
   }, [user]);
 
   
-  async function loadGenerations() {
-    if (!user?.id) {
-      setGenerations([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const { data, error } = await supabase
-        .from('content_generations')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const formatted = (data || []).map((item) => ({
-        id: item.id,
-        transcript: item.transcript,
-        outputs: item.outputs,
-        createdAt: item.created_at,
-      }));
-
-      setGenerations(formatted);
-    } catch (err) {
-      console.error('Failed to load generations:', err);
-    } finally {
-      setLoading(false);
-    }
+  
+async function loadGenerations() {
+  if (!user?.id) {
+    setGenerations([]);
+    setLoading(false);
+    return;
   }
+
+  setLoading(true);
+
+  try {
+    // 1. Read old browser generations for this user
+    const storageKey = `cf_generations_${user.id}`;
+    const oldData = localStorage.getItem(storageKey);
+
+    if (oldData) {
+      try {
+        const legacyGenerations = JSON.parse(oldData);
+
+        if (Array.isArray(legacyGenerations)) {
+          const records = legacyGenerations
+            .filter((item) =>
+              item?.id &&
+              item?.transcript &&
+              item?.outputs
+            )
+            .map((item) => ({
+              id: String(item.id),
+              user_id: user.id,
+              transcript: item.transcript,
+              outputs: item.outputs,
+              created_at: item.createdAt || new Date().toISOString(),
+            }));
+
+          // 2. Import old records without overwriting existing records
+          if (records.length > 0) {
+            const { error: migrationError } = await supabase
+              .from('content_generations')
+              .upsert(records, {
+                onConflict: 'id',
+                ignoreDuplicates: true,
+              });
+
+            if (migrationError) {
+              console.error('Old generation migration failed:', migrationError);
+            } else {
+              console.log('Old generations migrated successfully.');
+            }
+          }
+        }
+      } catch (migrationError) {
+        console.error('Could not read old browser generations:', migrationError);
+      }
+    }
+
+    // 3. Load all cloud generations
+    const { data, error } = await supabase
+      .from('content_generations')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const formatted = (data || []).map((item) => ({
+      id: item.id,
+      transcript: item.transcript,
+      outputs: item.outputs,
+      createdAt: item.created_at,
+    }));
+
+    setGenerations(formatted);
+  } catch (err) {
+    console.error('Failed to load generations:', err);
+  } finally {
+    setLoading(false);
+  }
+}
 
   async function saveGeneration(generation) {
     const { error } = await supabase
