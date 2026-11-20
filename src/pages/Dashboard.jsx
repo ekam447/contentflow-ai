@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import { FileText, Plus, Clock, Copy, Trash2, Edit2, Download } from 'lucide-react';
 import { Navbar, Footer } from '../components';
+import { supabase } from '../lib/supabase';
 
 export function Dashboard() {
   const { user, signOut } = useAuth();
@@ -10,6 +11,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [newTranscript, setNewTranscript] = useState('');
   const [showGenerator, setShowGenerator] = useState(false);
+  const [generationError, setGenerationError] = useState('');
 
   useEffect(() => {
     loadGenerations();
@@ -47,19 +49,68 @@ export function Dashboard() {
     }
   }
 
-  const handleGenerate = async (e) => {
-    e.preventDefault();
-    if (!newTranscript.trim()) return;
+  
+const handleGenerate = async (e) => {
+  e.preventDefault();
+
+  const transcript = newTranscript.trim();
+
+  if (!transcript) return;
+
+  if (transcript.length < 20) {
+    setGenerationError('Please enter at least 20 characters.');
+    return;
+  }
+
+  if (transcript.length > 30000) {
+    setGenerationError('Your transcript must be 30,000 characters or less.');
+    return;
+  }
+
+  setGenerating(true);
+  setGenerationError('');
+
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      'generate-content',
+      {
+        body: {
+          transcript,
+          brandVoice: 'Clear, engaging and natural',
+        },
+      }
+    );
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data?.success || !data?.outputs) {
+      throw new Error(data?.error || 'AI generation failed.');
+    }
+
     const generation = {
       id: Date.now().toString(),
-      transcript: newTranscript,
+      transcript,
       createdAt: new Date().toISOString(),
-      outputs: {},
+      outputs: data.outputs,
     };
+
     await saveGeneration(generation);
+
     setNewTranscript('');
     setShowGenerator(false);
-  };
+  } catch (err) {
+    console.error('Content generation failed:', err);
+
+    setGenerationError(
+      err?.message || 'Something went wrong. Please try again.'
+    );
+  } finally {
+    setGenerating(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--color-bg-alt)' }}>
@@ -163,9 +214,27 @@ export function Dashboard() {
                     />
                     <p className="form-hint">ContentFlow AI will generate Instagram captions, YouTube titles & descriptions, LinkedIn posts, X posts, SEO blog articles, short-form scripts, hashtags, and keywords.</p>
                   </div>
-                  <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
-                    Generate content pack
-                  </button>
+                  {generationError && (
+  <div
+    role="alert"
+    style={{
+      color: 'var(--color-error)',
+      padding: '0.75rem',
+      backgroundColor: 'var(--color-bg-alt)',
+      borderRadius: '0.5rem',
+    }}
+  >
+    {generationError}
+  </div>
+)}
+
+<button
+  type="submit"
+  className="btn btn-primary btn-full"
+  disabled={loading || generating}
+>
+  {generating ? 'Generating your content...' : 'Generate content pack'}
+</button>
                 </form>
                 <button className="btn btn-ghost" onClick={() => setShowGenerator(false)} style={{ marginTop: '0.5rem' }}>
                   Cancel
