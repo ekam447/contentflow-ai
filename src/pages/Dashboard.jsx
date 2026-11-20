@@ -18,35 +18,75 @@ export function Dashboard() {
     loadGenerations();
   }, [user]);
 
+  
   async function loadGenerations() {
+    if (!user?.id) {
+      setGenerations([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
+
     try {
-      // Placeholder: in production this would fetch from Supabase with RLS
-      const saved = localStorage.getItem(`cf_generations_${user?.id}`);
-      if (saved) {
-        setGenerations(JSON.parse(saved));
-      }
+      const { data, error } = await supabase
+        .from('content_generations')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formatted = (data || []).map((item) => ({
+        id: item.id,
+        transcript: item.transcript,
+        outputs: item.outputs,
+        createdAt: item.created_at,
+      }));
+
+      setGenerations(formatted);
     } catch (err) {
-      console.error('Failed to load generations', err);
+      console.error('Failed to load generations:', err);
     } finally {
       setLoading(false);
     }
   }
 
   async function saveGeneration(generation) {
-    const updated = [generation, ...generations];
-    setGenerations(updated);
-    if (user?.id) {
-      localStorage.setItem(`cf_generations_${user.id}`, JSON.stringify(updated));
-    }
+    const { error } = await supabase
+      .from('content_generations')
+      .insert({
+        id: generation.id,
+        user_id: user.id,
+        transcript: generation.transcript,
+        outputs: generation.outputs,
+        created_at: generation.createdAt,
+      });
+
+    if (error) throw error;
+
+    setGenerations((previous) => [
+      generation,
+      ...previous,
+    ]);
   }
 
   async function deleteGeneration(id) {
     if (!window.confirm('Delete this generated content?')) return;
-    const updated = generations.filter((g) => g.id !== id);
-    setGenerations(updated);
-    if (user?.id) {
-      localStorage.setItem(`cf_generations_${user.id}`, JSON.stringify(updated));
+
+    try {
+      const { error } = await supabase
+        .from('content_generations')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setGenerations((previous) =>
+        previous.filter((g) => g.id !== id)
+      );
+    } catch (err) {
+      console.error('Failed to delete generation:', err);
+      alert('Could not delete this content. Please try again.');
     }
   }
 
