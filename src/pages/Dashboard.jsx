@@ -20,6 +20,7 @@ export function Dashboard() {
 
   
   
+  
 async function loadGenerations() {
   if (!user?.id) {
     setGenerations([]);
@@ -30,51 +31,7 @@ async function loadGenerations() {
   setLoading(true);
 
   try {
-    // 1. Read old browser generations for this user
-    const storageKey = `cf_generations_${user.id}`;
-    const oldData = localStorage.getItem(storageKey);
-
-    if (oldData) {
-      try {
-        const legacyGenerations = JSON.parse(oldData);
-
-        if (Array.isArray(legacyGenerations)) {
-          const records = legacyGenerations
-            .filter((item) =>
-              item?.id &&
-              item?.transcript &&
-              item?.outputs
-            )
-            .map((item) => ({
-              id: String(item.id),
-              user_id: user.id,
-              transcript: item.transcript,
-              outputs: item.outputs,
-              created_at: item.createdAt || new Date().toISOString(),
-            }));
-
-          // 2. Import old records without overwriting existing records
-          if (records.length > 0) {
-            const { error: migrationError } = await supabase
-              .from('content_generations')
-              .upsert(records, {
-                onConflict: 'id',
-                ignoreDuplicates: true,
-              });
-
-            if (migrationError) {
-              console.error('Old generation migration failed:', migrationError);
-            } else {
-              console.log('Old generations migrated successfully.');
-            }
-          }
-        }
-      } catch (migrationError) {
-        console.error('Could not read old browser generations:', migrationError);
-      }
-    }
-
-    // 3. Load all cloud generations
+    // Load generations from Supabase only
     const { data, error } = await supabase
       .from('content_generations')
       .select('*')
@@ -90,12 +47,18 @@ async function loadGenerations() {
     }));
 
     setGenerations(formatted);
+
+    // Old generations have already been migrated.
+    // Remove the legacy browser copy only after cloud loading succeeds.
+    localStorage.removeItem(`cf_generations_${user.id}`);
+
   } catch (err) {
     console.error('Failed to load generations:', err);
   } finally {
     setLoading(false);
   }
 }
+
 
   async function saveGeneration(generation) {
     const { error } = await supabase
